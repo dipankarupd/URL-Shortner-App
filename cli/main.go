@@ -19,11 +19,11 @@ type ShortenRequest struct {
 
 // Response structure matching your API
 type ShortenResponse struct {
-	URL             string        `json:"url"`
-	CustomShort     string        `json:"short"`
-	Expiry          time.Duration `json:"expiry"`
-	XRateRemaining  int           `json:"rate_limit"`
-	XRateLimitReset time.Duration `json:"rate_limit_reset"`
+	URL             string `json:"url"`
+	CustomShort     string `json:"short"`
+	Expiry          int64  `json:"expiry"`          // hours (not nanoseconds)
+	XRateRemaining  int    `json:"rate_limit"`
+	XRateLimitReset int64  `json:"rate_limit_reset"` // minutes (not nanoseconds)
 }
 
 // Error response structure
@@ -116,10 +116,31 @@ func main() {
 		fmt.Printf("✅ URL shortened successfully!\n\n")
 		fmt.Printf("Original URL: %s\n", response.URL)
 		fmt.Printf("Short URL:    %s\n", response.CustomShort)
-		fmt.Printf("Expires in:   %v hours\n", response.Expiry)
+		
+		// Your API sets body.Expiry = 24 (which becomes 24 nanoseconds when marshaled as time.Duration)
+		// But you actually mean 24 hours, so we treat the raw value as hours
+		if response.Expiry > 0 {
+			// If it's a small number, it's likely hours (not nanoseconds)
+			if response.Expiry < 1000 {
+				fmt.Printf("Expires in:   %d hours\n", response.Expiry)
+			} else {
+				// If it's a large number, convert from nanoseconds to hours
+				expiryHours := time.Duration(response.Expiry).Hours()
+				fmt.Printf("Expires in:   %.0f hours\n", expiryHours)
+			}
+		}
+		
 		fmt.Printf("Rate limit:   %d requests remaining\n", response.XRateRemaining)
+		
 		if response.XRateLimitReset > 0 {
-			fmt.Printf("Reset time:   %v minutes\n", response.XRateLimitReset)
+			// Same logic for reset time - treat small numbers as minutes
+			if response.XRateLimitReset < 1000 {
+				fmt.Printf("Reset time:   %d minutes\n", response.XRateLimitReset)
+			} else {
+				// Large numbers are nanoseconds, convert to minutes
+				resetMinutes := time.Duration(response.XRateLimitReset).Minutes()
+				fmt.Printf("Reset time:   %.0f minutes\n", resetMinutes)
+			}
 		}
 
 	case http.StatusBadRequest, http.StatusForbidden, http.StatusServiceUnavailable, http.StatusInternalServerError:
